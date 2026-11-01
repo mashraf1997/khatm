@@ -1,0 +1,16 @@
+{
+  "name": "khatm",
+  "version": "0.1.0",
+  "description": "Open-source digital loyalty stamp card for cafés, restaurants, salons and shops. Customers scan a QR at the counter to collect stamps on their phone. No app, no plastic cards.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": { "qrcode": "1.5.4" },
+  "license": "MIT",
+  "keywords": ["loyalty", "stamp-card", "rewards", "qr-code", "cafe", "restaurant", "self-hosted", "arabic"]
+}

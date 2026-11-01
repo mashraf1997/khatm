@@ -1,0 +1,18 @@
+# One-click deploy on a Hostinger VPS (Docker Manager), or anywhere with Docker:
+#   docker compose up -d
+# Then open http://YOUR-SERVER-IP and create your password.
+services:
+  khatm:
+    image: ghcr.io/mashraf1997/khatm:latest
+    container_name: khatm
+    restart: unless-stopped
+    ports:
+      - "80:3000"
+    environment:
+      - NODE_ENV=production
+      - SETUP_TOKEN=${SETUP_TOKEN:-}
+    volumes:
+      - khatm-data:/data
+
+volumes:
+  khatm-data:
