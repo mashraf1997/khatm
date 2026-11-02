@@ -11,6 +11,7 @@ services:
     environment:
       - NODE_ENV=production
       - SETUP_TOKEN=${SETUP_TOKEN:-}
+      - DEMO_MODE=${DEMO_MODE:-false}
     volumes:
       - khatm-data:/data
 

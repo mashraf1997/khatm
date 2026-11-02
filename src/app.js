@@ -6,6 +6,8 @@ import crypto from 'node:crypto';
 import QRCode from 'qrcode';
 import { hashPassword, verifyPassword, createSession, checkSession, parseCookies, RateLimiter } from './auth.js';
 import { send, readJson, clientIp, originOf, serveStatic, cookie, VERSION } from './http.js';
+import { demoConfig, resetData } from './demo-mode.js';
+import { buildDemo } from './demo-data.js';
 
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 const randCode = (n) => [...crypto.randomBytes(n)].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
@@ -37,7 +39,7 @@ export function defaultData() {
 
 export const normPhone = (p) => String(p || '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^\d+]/g, '').replace(/^00/, '+');
 
-export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '' } = {}) {
+export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '', env = process.env } = {}) {
   fs.mkdirSync(dataDir, { recursive: true });
   const file = path.join(dataDir, 'khatm.json');
   const data = fs.existsSync(file) ? { ...defaultData(), ...JSON.parse(fs.readFileSync(file, 'utf8')) } : defaultData();
@@ -46,6 +48,11 @@ export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '' 
   const flush = () => { clearTimeout(timer); fs.writeFileSync(file + '.tmp', JSON.stringify(data)); fs.renameSync(file + '.tmp', file); };
   const save = () => { clearTimeout(timer); timer = setTimeout(flush, 200); };
   flush(); // persists defaults added by upgrades (for example the order hook key)
+  // DEMO_MODE=true: a public showcase with sample data that resets on a timer.
+  const demo = demoConfig(env);
+  const resetDemo = () => { resetData(data, () => buildDemo(demo), demo); flush(); };
+  let demoTimer = null;
+  if (demo) { resetDemo(); demoTimer = setInterval(resetDemo, demo.resetMinutes * 60_000); demoTimer.unref?.(); }
 
   const loginLimiter = new RateLimiter(10, 15 * 60_000);
   const joinLimiter = new RateLimiter(20, 60 * 60_000);
@@ -239,7 +246,8 @@ export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '' 
     }
 
     // ---------- owner auth ----------
-    if (p === '/api/session' && method === 'GET') return send(res, 200, { needsSetup: !data.admin, authed: isAuthed(req), setupTokenRequired: Boolean(setupToken), version: VERSION });
+    if (demo && method === 'POST' && (p === '/api/setup' || p === '/api/password')) return send(res, 403, { error: 'Not available in the demo' });
+    if (p === '/api/session' && method === 'GET') return send(res, 200, { needsSetup: !data.admin, authed: isAuthed(req), setupTokenRequired: Boolean(setupToken), version: VERSION, demo: demo ? { password: demo.password, resetMinutes: demo.resetMinutes } : null });
     if (p === '/api/setup' && method === 'POST') {
       if (data.admin) return send(res, 409, { error: 'Already set up' });
       const body = await readJson(req);
@@ -321,7 +329,7 @@ export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '' 
         if (b.stampsNeeded != null) s.stampsNeeded = Math.min(20, Math.max(3, Number(b.stampsNeeded) || 8));
         if (b.welcomeStamps != null) s.welcomeStamps = Math.min(5, Math.max(0, Number(b.welcomeStamps) || 0));
         if (b.cooldownMinutes != null) s.cooldownMinutes = Math.min(1440, Math.max(0, Number(b.cooldownMinutes) || 0));
-        if (/^\d{4,6}$/.test(String(b.staffPin || ''))) s.staffPin = String(b.staffPin);
+        if (!demo && /^\d{4,6}$/.test(String(b.staffPin || ''))) s.staffPin = String(b.staffPin);
         save();
         return send(res, 200, { settings: s });
       }
@@ -352,6 +360,7 @@ export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '' 
   });
 
   return {
+    resetDemo,
     server,
     data,
     async start(port) {
@@ -359,6 +368,7 @@ export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '' 
       return server.address().port;
     },
     async stop() {
+      clearInterval(demoTimer);
       flush();
       await new Promise((r) => server.close(r));
     },
