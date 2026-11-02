@@ -11,6 +11,7 @@
       search: 'دوّر بالاسم أو الرقم', stamps: 'الأختام', total: 'الإجمالي', rewards: 'مكافآت', lastVisit: 'آخر زيارة', joined: 'انضم', add: '+1', remove: '-1', redeem: 'استلم مكافأة', link: 'رابط الكارت', del: 'حذف', export: 'تصدير CSV', noMembers: 'لسه مفيش عملاء. اطبع البوستر وابدأ!', cardQr: 'خلّي العميل يمسح الكود ده عشان يفتح كارته',
       program: 'برنامج الولاء', welcome: 'أختام هدية عند الانضمام', cooldown: 'أقل وقت بين ختمين (دقيقة)', look: 'شكل الكارت', color: 'اللون', emoji: 'الإيموجي', terms: 'الشروط (اختياري)', save: 'حفظ', saved: 'اتحفظ ✓', pinHint: '4 لـ 6 أرقام. الكاشير بيكتبه على موبايل العميل عشان يسلّمه المكافأة.',
       pwTitle: 'تغيير كلمة السر', current: 'الحالية', next: 'الجديدة', change: 'تغيير', close: 'إغلاق', ago: 'من',
+      hookTitle: 'ختم تلقائي مع كل طلب', hookLead: 'حط الرابط ده في إشعارات Wakeel (Webhook) أو في Dukkan، وكل عميل عنده كارت هياخد ختم أول ما يطلب أونلاين.', copy: 'نسخ', copied: 'اتنسخ ✓',
     },
     en: {
       overview: 'Home', members: 'Customers', settings: 'Settings', counter: 'Counter screen ↗', logout: 'Sign out', lang: 'العربية',
@@ -21,6 +22,7 @@
       search: 'Search name or phone', stamps: 'Stamps', total: 'Total', rewards: 'Rewards', lastVisit: 'Last visit', joined: 'Joined', add: '+1', remove: '-1', redeem: 'Redeem reward', link: 'Card link', del: 'Delete', export: 'Export CSV', noMembers: 'No customers yet. Print the poster and start!', cardQr: 'Let the customer scan this to open their card',
       program: 'Loyalty program', welcome: 'Welcome stamps on sign-up', cooldown: 'Minimum minutes between stamps', look: 'Card look', color: 'Color', emoji: 'Emoji', terms: 'Terms (optional)', save: 'Save', saved: 'Saved ✓', pinHint: '4 to 6 digits. Staff type it on the customer’s phone to hand over the reward.',
       pwTitle: 'Change password', current: 'Current', next: 'New', change: 'Change', close: 'Close', ago: 'ago',
+      hookTitle: 'Automatic stamp with every order', hookLead: 'Paste this URL in Wakeel notifications (webhook) or in Dukkan. Customers with a card get a stamp when they order online.', copy: 'Copy', copied: 'Copied ✓',
     },
   };
   const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -155,6 +157,8 @@
         <div class="grid4"><label class="field" for="c">${t('color')}<input type="color" id="c" value="${esc(s.color)}" style="height:40px;width:100%"></label><label class="field" for="e">${t('emoji')}<input type="text" id="e" value="${esc(s.emoji)}" maxlength="4"></label></div>
         <label class="field" for="tm">${t('terms')}<input type="text" id="tm" value="${esc(s.terms)}"></label>
         <div class="row"><button class="btn primary" type="submit">${t('save')}</button></div></form>
+      <section class="card" style="max-width:720px"><h2>${t('hookTitle')}</h2><p class="muted small">${t('hookLead')}</p>
+        <div class="copy"><pre id="hk">${esc(location.origin + '/hooks/order?key=' + s.hookKey)}</pre><button class="btn sm" type="button" id="hkc">${t('copy')}</button></div></section>
       <form class="card" id="pw" style="max-width:480px"><h2>${t('pwTitle')}</h2><label class="field" for="pc">${t('current')}<input type="password" id="pc"></label><label class="field" for="pn">${t('next')}<input type="password" id="pn"></label><div class="err" id="pe"></div><div class="row"><button class="btn primary" type="submit">${t('change')}</button></div></form>
       <p class="muted small">Khatm · ${esc(session.version)} · MIT</p></div>`;
     $('#sf').onsubmit = async (e) => {
@@ -164,6 +168,7 @@
         toast(t('saved'));
       } catch (err) { toast(err.message); }
     };
+    $('#hkc').onclick = async () => { try { await navigator.clipboard.writeText($('#hk').textContent); toast(t('copied')); } catch { toast($('#hk').textContent); } };
     $('#pw').onsubmit = async (e) => { e.preventDefault(); try { await api('/api/password', { method: 'POST', body: { current: $('#pc').value, next: $('#pn').value } }); toast(t('saved')); } catch (err) { $('#pe').textContent = err.message; } };
   }
   boot();

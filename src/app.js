@@ -26,7 +26,9 @@ export function defaultData() {
       staffPin: String(crypto.randomInt(1000, 10000)),
       codeTtlSeconds: 90,
       terms: '',
+      hookKey: crypto.randomBytes(12).toString('hex'), // secret for /hooks/order (Wakeel, Dukkan)
     },
+    processedOrders: [], // order references already stamped
     members: [], // { id, token, name, phone, stamps, totalStamps, redeemed, createdAt, lastStampAt }
     events: [], // { type: join|stamp|redeem|adjust, memberId, count, at, via }
     codes: [], // counter codes: { code, expiresAt, usedBy: [memberId] }
@@ -43,7 +45,7 @@ export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '' 
   let timer;
   const flush = () => { clearTimeout(timer); fs.writeFileSync(file + '.tmp', JSON.stringify(data)); fs.renameSync(file + '.tmp', file); };
   const save = () => { clearTimeout(timer); timer = setTimeout(flush, 200); };
-  if (!fs.existsSync(file)) flush();
+  flush(); // persists defaults added by upgrades (for example the order hook key)
 
   const loginLimiter = new RateLimiter(10, 15 * 60_000);
   const joinLimiter = new RateLimiter(20, 60 * 60_000);
@@ -146,6 +148,29 @@ export function createApp({ dataDir, setupToken = process.env.SETUP_TOKEN || '' 
     let m;
 
     if (p === '/health') return send(res, 200, { ok: true, version: VERSION });
+
+    // Orders from Wakeel or Dukkan give the customer a stamp automatically.
+    if (p === '/hooks/order' && method === 'POST') {
+      const key = url.searchParams.get('key') || '';
+      const a = Buffer.from(key);
+      const b = Buffer.from(data.settings.hookKey);
+      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return send(res, 403, { error: 'bad_key' });
+      const body = await readJson(req);
+      const order = body.request || body.order || body;
+      if (body.event && !/order/.test(body.event)) return send(res, 200, { stamped: false, reason: 'not_an_order' });
+      const ref = String(order.id || order.no || order.reference || '');
+      const phone = normPhone(order.phone || order.customer?.phone || '');
+      if (ref && data.processedOrders.includes(ref)) return send(res, 200, { stamped: false, reason: 'duplicate' });
+      const tail = phone.replace(/\D/g, '').slice(-9);
+      const member = tail.length >= 7 ? data.members.find((m) => m.phone.replace(/\D/g, '').slice(-9) === tail) : null;
+      if (!member) return send(res, 200, { stamped: false, reason: 'no_card' });
+      if (ref) {
+        data.processedOrders.push(ref);
+        if (data.processedOrders.length > 5000) data.processedOrders.splice(0, 1000);
+      }
+      addStamps(member, 1, 'order');
+      return send(res, 200, { stamped: true, stamps: member.stamps });
+    }
 
     // ---------- customer pages ----------
     if (method === 'GET' && (p === '/join' || /^\/c\/[\w-]+$/.test(p) || /^\/s\/[A-Z0-9]+$/i.test(p))) return serveStatic(res, 'card.html');

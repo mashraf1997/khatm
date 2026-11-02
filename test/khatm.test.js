@@ -132,3 +132,19 @@ test('customer pages and QR images are served', async () => {
   assert.match(svg, /^<svg/);
   assert.equal((await fetch(base + '/qr.svg?path=https://evil.test')).status, 400);
 });
+
+test('orders from Wakeel give the customer a stamp once', async () => {
+  const key = app.data.settings.hookKey;
+  const member = app.data.members[0];
+  const before = member.stamps;
+  let r = await call('/hooks/order?key=wrong', { method: 'POST', body: {} });
+  assert.equal(r.status, 403);
+  const event = { event: 'order', request: { id: 'RABC12', phone: '+20 100 123 4567', customerName: 'Mona' } };
+  r = await call('/hooks/order?key=' + key, { method: 'POST', body: event });
+  assert.equal(r.body.stamped, true, 'phone matched across +20 and 0 prefixes');
+  r = await call('/hooks/order?key=' + key, { method: 'POST', body: event });
+  assert.equal(r.body.reason, 'duplicate');
+  r = await call('/hooks/order?key=' + key, { method: 'POST', body: { order: { no: 77, customer: { phone: '0199999999' } } } });
+  assert.equal(r.body.reason, 'no_card');
+  assert.equal(member.stamps, before + 1);
+});
